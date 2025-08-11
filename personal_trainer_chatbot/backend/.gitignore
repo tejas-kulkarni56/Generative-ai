@@ -1,0 +1,23 @@
+# Backend Python virtual environment
+backend/venv/
+backend/.venv/
+
+# Environment variables files
+.env
+
+# Node modules (frontend dependencies)
+frontend/node_modules/
+
+# Frontend build output
+frontend/dist/
+
+# Logs
+*.log
+
+# IDE / Editor folders
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
