@@ -62,7 +62,7 @@ Now begin helping users with his questions like a personal assistant.
 
     try:
         resp = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4",
             messages=messages,
             max_tokens=600,
             temperature=1.5
