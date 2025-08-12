@@ -1,55 +1,80 @@
+# backend/app.py
+import os
+import logging
+from dotenv import load_dotenv
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from dotenv import load_dotenv
-import os
 from openai import OpenAI
 
-# Load environment variables from .env file
+# Load .env (only for local dev). On Render set env vars in dashboard.
 load_dotenv()
 
-# Create Flask app
-app = Flask(__name__)
-CORS(app)  # Allow requests from any frontend origin
+logging.basicConfig(level=logging.INFO)
 
-# Get API key from environment
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
-    raise ValueError("❌ OPENAI_API_KEY is missing in environment variables!")
+    # In production (Render) you MUST set this env var in the Render dashboard
+    raise RuntimeError("OPENAI_API_KEY not found in environment. Set it in Render or backend/.env for local dev.")
 
 # Create OpenAI client
 client = OpenAI(api_key=OPENAI_API_KEY)
 
+app = Flask(__name__)
+CORS(app)  # allow all origins; for production restrict origins to your frontend
+
+@app.route("/", methods=["GET"])
+def health():
+    return jsonify({"status": "ok", "message": "Personal Trainer backend running"})
 
 @app.route("/chat", methods=["POST"])
 def chat():
     try:
-        # Parse JSON request
-        data = request.get_json()
-        if not data or "message" not in data:
-            return jsonify({"error": "Missing 'message' field"}), 400
+        data = request.get_json(force=True)
+        user_msg = (data.get("message") or "").strip()
+        custom_prompt = data.get("system_prompt", None)
 
-        user_message = data["message"]
+        if not user_msg:
+            return jsonify({"error": "No message provided"}), 400
 
-        # Call OpenAI API
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",  # Use your desired model
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": user_message}
-            ],
-            max_tokens=200
+        default_prompt = (
+            "You are a fitness personal AI assistant. Keep replies short, friendly and helpful. "
+            "If the user writes in Hinglish, reply in Hinglish. Be encouraging and concise."
         )
 
-        # Extract reply
-        ai_reply = response.choices[0].message.content.strip()
+        messages = [
+            {"role": "system", "content": custom_prompt or default_prompt},
+            {"role": "user", "content": user_msg},
+        ]
 
-        return jsonify({"reply": ai_reply})
+        # Use gpt-3.5-turbo model (widely available). Change if you have other model access.
+        resp = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=messages,
+            max_tokens=600,
+            temperature=1.5,
+        )
+
+        # Safely extract assistant message
+        assistant_msg = ""
+        try:
+            assistant_msg = resp.choices[0].message.content
+        except Exception:
+            assistant_msg = None
+
+        assistant_msg = assistant_msg or "Sorry, I couldn't get a reply."
+
+        logging.info("User: %s", user_msg)
+        logging.info("Bot: %s", assistant_msg[:200])
+
+        return jsonify({"reply": assistant_msg})
 
     except Exception as e:
-        # Log error for debugging
-        print("❌ Error in /chat:", str(e))
-        return jsonify({"error": str(e)}), 500
+        logging.exception("Error in /chat")
+        # Return a generic error but include details for debugging (you can remove details in prod)
+        return jsonify({"error": "OpenAI request failed", "details": str(e)}), 500
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
+    port = int(os.environ.get("PORT", 5000))
+    # debug=True only for local dev — ok for now
+    app.run(host="0.0.0.0", port=port)
