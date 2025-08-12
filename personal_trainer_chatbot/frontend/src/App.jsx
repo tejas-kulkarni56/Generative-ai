@@ -18,7 +18,8 @@ export default function App() {
     setLoading(true);
 
     try {
-      const res = await fetch("https://generative-ai-8oru.onrender.com/chat", {
+      const backendUrl = import.meta.env.VITE_BACKEND_URL;
+      const res = await fetch(`${backendUrl}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: userMsg.content }),
@@ -76,8 +77,6 @@ export default function App() {
         )}
         <div ref={chatEndRef} />
       </div>
-
-      
 
       {/* Input Area */}
       <div className="bg-gray-800 p-4 border-t border-gray-700">
