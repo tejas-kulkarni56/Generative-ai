@@ -1,84 +1,55 @@
-# backend/app.py
-import os
-import logging
-from dotenv import load_dotenv
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from dotenv import load_dotenv
+import os
 from openai import OpenAI
 
+# Load environment variables from .env file
 load_dotenv()
 
-API_KEY = os.getenv("OPENAI_API_KEY")
-if not API_KEY:
-    raise RuntimeError("OPENAI_API_KEY not found in environment. Add it to backend/.env")
-
-client = OpenAI(api_key=API_KEY)
-
+# Create Flask app
 app = Flask(__name__)
-CORS(app)
+CORS(app)  # Allow requests from any frontend origin
 
-logging.basicConfig(level=logging.INFO)
+# Get API key from environment
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+if not OPENAI_API_KEY:
+    raise ValueError("❌ OPENAI_API_KEY is missing in environment variables!")
 
-@app.route("/", methods=["GET"])
-def health():
-    return jsonify({"status": "ok", "message": "Personal Trainer backend running"})
+# Create OpenAI client
+client = OpenAI(api_key=OPENAI_API_KEY)
+
 
 @app.route("/chat", methods=["POST"])
 def chat():
-    data = request.get_json(force=True)
-    user_msg = data.get("message", "").strip()
-    custom_prompt = data.get("system_prompt", None)
-
-    if not user_msg:
-        return jsonify({"error": "No message provided"}), 400
-
-    # Default system prompt
-    default_prompt = """You are a fitness personal AI assistant. You are helpful, respectful, concise, and encouraging. You help him stay productive, healthy, and focused. You can answer fitness-related queries, give study tips, track habits, or help set goals.
-
-Use short, friendly messages. Keep tone casual but intelligent. Avoid long paragraphs. Be proactive if needed.
-You should talk in hinglish language if any user prompts in hinglish.
-
-Examples:
-
-User: “remind me to drink water every 2 hours”
-Assistant: “Got it! I'll remind you every 2 hours to hydrate 💧”
-
-User: “give me a quick chest workout for gym”
-Assistant: “🔥 Quick chest blast: 1) Bench Press – 3x8, 2) Incline Dumbbell – 3x10, 3) Push-ups – 3x20. Rest 60 secs.”
-
-User: “I feel lazy today, don’t wanna study”
-Assistant: “Happens to the best! Just start with 10 mins. Momentum > Motivation 🚀”
-
-User: “track my sleep for 7 days”
-Assistant: “Sleep tracker started 💤 I’ll ask each night for your hours.”
-
-Now begin helping users with his questions like a personal assistant.
-    """
-
-    messages = [
-        {"role": "system", "content": custom_prompt or default_prompt},
-        {"role": "user", "content": user_msg}
-    ]
-
     try:
-        resp = client.chat.completions.create(
-            model="gpt-4",
-            messages=messages,
-            max_tokens=600,
-            temperature=1.5
+        # Parse JSON request
+        data = request.get_json()
+        if not data or "message" not in data:
+            return jsonify({"error": "Missing 'message' field"}), 400
+
+        user_message = data["message"]
+
+        # Call OpenAI API
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",  # Use your desired model
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": user_message}
+            ],
+            max_tokens=200
         )
 
-        assistant_msg = resp.choices[0].message.content or "Sorry, I couldn't get a reply."
-        logging.info("User: %s", user_msg)
-        logging.info("Bot: %s", assistant_msg[:200])
+        # Extract reply
+        ai_reply = response.choices[0].message.content.strip()
 
-        return jsonify({"reply": assistant_msg})
+        return jsonify({"reply": ai_reply})
 
     except Exception as e:
-        logging.exception("OpenAI request failed")
-        return jsonify({"error": "OpenAI request failed", "details": str(e)}), 500
+        # Log error for debugging
+        print("❌ Error in /chat:", str(e))
+        return jsonify({"error": str(e)}), 500
+
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT"))
-    app.run(host="0.0.0.0", port=port)
-
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
