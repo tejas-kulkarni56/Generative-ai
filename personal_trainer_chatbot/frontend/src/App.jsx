@@ -1,3 +1,4 @@
+// src/App.jsx
 import React, { useState, useRef, useEffect } from "react";
 
 export default function App() {
@@ -18,17 +19,32 @@ export default function App() {
     setLoading(true);
 
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL;
-      const res = await fetch(`${backendUrl}/chat`, {
+      const backendUrl = "https://generative-ai-8oru.onrender.com";
+      
+      if (!backendUrl) throw new Error("VITE_BACKEND_URL not set");
+
+      const res = await fetch(`${backendUrl.replace(/\/$/, "")}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: userMsg.content }),
       });
+
+      if (!res.ok) {
+        // Try to read error body for debugging
+        let errBody;
+        try {
+          errBody = await res.json();
+        } catch {
+          errBody = await res.text();
+        }
+        throw new Error(`Server error ${res.status}: ${JSON.stringify(errBody)}`);
+      }
+
       const data = await res.json();
       const botMsg = { role: "assistant", content: data.reply || "No reply." };
       setMessages((prev) => [...prev, botMsg]);
     } catch (err) {
-      console.error(err);
+      console.error("Fetch error:", err);
       setMessages((prev) => [
         ...prev,
         { role: "assistant", content: "Error connecting to server." },
@@ -47,19 +63,15 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-screen bg-gray-900 text-white">
-      {/* Header */}
       <div className="bg-gray-800 p-4 font-semibold text-lg shadow-md border-b border-gray-700">
-        💪 Fitness AI Assistant 
+        💪 Fitness AI Assistant
       </div>
 
-      {/* Chat Area */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.map((msg, idx) => (
           <div
             key={idx}
-            className={`flex ${
-              msg.role === "user" ? "justify-end" : "justify-start"
-            }`}
+            className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
           >
             <div
               className={`max-w-xl px-4 py-2 rounded-2xl shadow-md whitespace-pre-line leading-relaxed ${
@@ -72,13 +84,10 @@ export default function App() {
             </div>
           </div>
         ))}
-        {loading && (
-          <div className="text-gray-400 text-sm">Trainer is thinking...</div>
-        )}
+        {loading && <div className="text-gray-400 text-sm">Trainer is thinking...</div>}
         <div ref={chatEndRef} />
       </div>
 
-      {/* Input Area */}
       <div className="bg-gray-800 p-4 border-t border-gray-700">
         <div className="flex space-x-2">
           <textarea
